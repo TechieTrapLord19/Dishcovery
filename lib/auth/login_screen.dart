@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/auth/auth_service.dart';
 import 'package:flutter_application_1/auth/signup_screen.dart';
 import '../screens/home_screen.dart';
 
@@ -22,9 +23,59 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      hintText: 'Enter your $label'.toLowerCase(),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: const BorderSide(color: Color(0xFFFFD580), width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: const BorderSide(color: Color(0xFFFFB84D), width: 2),
+      ),
+      prefixIcon: label == "Email"
+          ? const Icon(Icons.email, color: Color(0xFFFFB84D))
+          : const Icon(Icons.lock, color: Color(0xFFFFB84D)),
+    );
+  }
+
+  void _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in all fields")),
+      );
+      return;
+    }
+
+    final user = await AuthService().logIn(email, password);
+
+    if (user != null) {
+      // Login successful
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Login successful!")));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } else {
+      // Login failed
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid email or password")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFFBF5), // soft cream background
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -33,22 +84,24 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Image.asset('assets/dishcovery.jpg', height: 120),
-                const SizedBox(height: 32),
+                // Logo
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.6,
+                  child: Image.asset('assets/dishcovery_transparent.png'),
+                ),
+                const SizedBox(height: 12),
+
+                // Subtitle
                 const Text(
                   'Welcome back!',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 20, color: Colors.black87),
                 ),
                 const SizedBox(height: 32),
+
+                // Email
                 TextFormField(
                   controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    suffixIcon: const Icon(Icons.email_outlined),
-                  ),
+                  decoration: _inputDecoration('Email'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
@@ -57,19 +110,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+
+                // Password
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                  decoration: _inputDecoration('Password').copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_off
                             : Icons.visibility,
+                        color: const Color(0xFFFFB84D),
                       ),
                       onPressed: () {
                         setState(() {
@@ -85,6 +137,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 8),
+
+                // Forgot Password
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -98,35 +153,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+
+                // Login Button
                 ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
-                      // Navigate to HomeScreen after successful login
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HomeScreen(),
-                        ),
-                      );
+                      _handleLogin();
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.yellow,
+                    backgroundColor: const Color(0xFFFFD580),
+                    foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: const Text(
-                    'Login',
-                    style: TextStyle(color: Colors.black),
-                  ),
+                  child: const Text('Login', style: TextStyle(fontSize: 16)),
                 ),
                 const SizedBox(height: 16),
+
+                // Sign Up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("You Don't Have Account? "),
+                    const Text("Don’t have an account? "),
                     TextButton(
                       onPressed: () {
                         Navigator.push(
@@ -138,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       child: const Text(
                         'Sign up',
-                        style: TextStyle(color: Colors.orange),
+                        style: TextStyle(color: Color(0xFFFFB84D)),
                       ),
                     ),
                   ],

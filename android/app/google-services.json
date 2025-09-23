@@ -1,0 +1,32 @@
+{
+  "project_info": {
+    "project_number": "907466917650",
+    "project_id": "dishcovery-5740f",
+    "storage_bucket": "dishcovery-5740f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:907466917650:android:b7c6534c8817ad820995cb",
+        "android_client_info": {
+          "package_name": "com.example.dishcovery"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKUxgDEcopb71rqRm8X47Zxi2PsJsqZcw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1",
+  "dependencies": {
+    "firebase_core": "^3.15.2"
+  }
+}

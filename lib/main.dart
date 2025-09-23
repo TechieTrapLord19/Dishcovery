@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'screens/landing_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_application_1/screens/landing_screen.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -13,11 +17,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Dishcovery',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
-        useMaterial3: true,
-      ),
-      home: const LandingScreen(), // Start with the LandingScreen
+      theme: ThemeData(useMaterial3: true),
+      home: const LandingScreen(),
     );
   }
 }
