@@ -253,7 +253,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
                     child: const Text(
-                      "submit recipe",
+                      "Submit Recipe",
                       style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
                     ),
                   ),

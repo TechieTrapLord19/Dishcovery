@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/auth/auth_service.dart';
 import 'package:flutter_application_1/auth/signup_screen.dart';
 import '../screens/home_screen.dart';
@@ -86,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 // Logo
                 SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.6,
+                  width: MediaQuery.of(context).size.width * 0.35,
                   child: Image.asset('assets/dishcovery_transparent.png'),
                 ),
                 const SizedBox(height: 12),
@@ -169,15 +170,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: const Text('Login', style: TextStyle(fontSize: 16)),
+                  child: const Text(
+                    'Login',
+                    style: TextStyle(fontSize: 16, color: Colors.black),
+                  ),
                 ),
-                const SizedBox(height: 16),
 
                 // Sign Up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don’t have an account? "),
+                    const Text("Don't have an account? "),
                     TextButton(
                       onPressed: () {
                         Navigator.push(

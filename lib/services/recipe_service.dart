@@ -13,7 +13,7 @@ class RecipeService {
   // Upload image to Cloudinary
 
   Future<String?> uploadImage(
-    File imageFile, {
+    File? imageFile, {
     Uint8List? webImageBytes,
   }) async {
     final url = Uri.parse(
@@ -38,6 +38,9 @@ class RecipeService {
         );
       } else {
         // For mobile: Use file path
+        if (imageFile == null) {
+          throw Exception("No image file provided for mobile upload");
+        }
         request.files.add(
           await http.MultipartFile.fromPath('file', imageFile.path),
         );
@@ -47,7 +50,6 @@ class RecipeService {
       if (response.statusCode == 200) {
         final responseData = await response.stream.bytesToString();
         final jsonResponse = json.decode(responseData);
-        print('Image uploaded successfully: ${jsonResponse['secure_url']}');
         return jsonResponse['secure_url']; // Return the image URL
       } else {
         print('Failed to upload image: ${response.statusCode}');

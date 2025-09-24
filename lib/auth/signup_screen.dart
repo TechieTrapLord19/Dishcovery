@@ -15,13 +15,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _fullNameController = TextEditingController();
+  final _bioController = TextEditingController();
+  final _profilePictureURLController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
+    _fullNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _bioController.dispose();
+    _profilePictureURLController.dispose();
     super.dispose();
   }
 
@@ -38,7 +44,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         borderRadius: BorderRadius.circular(30),
         borderSide: const BorderSide(color: Color(0xFFFFB84D), width: 2),
       ),
-      prefixIcon: label == "Full Name"
+      prefixIcon: label == "Username"
           ? const Icon(Icons.person, color: Color(0xFFFFB84D))
           : label == "Email"
           ? const Icon(Icons.email, color: Color(0xFFFFB84D))
@@ -69,6 +75,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   style: TextStyle(fontSize: 20, color: Colors.black87),
                 ),
                 const SizedBox(height: 32),
+                TextFormField(
+                  controller: _fullNameController,
+                  decoration: _inputDecoration('Full Name'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your full name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _nameController,
                   decoration: _inputDecoration('Username'),
@@ -125,6 +142,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         _emailController.text.trim(),
                         _passwordController.text.trim(),
                         _nameController.text.trim(),
+                        _fullNameController.text.trim(),
+                        _bioController.text.trim(),
+                        _profilePictureURLController.text.trim(),
                       );
 
                       if (user != null) {
@@ -145,7 +165,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFD580),
-                    foregroundColor: Colors.white,
+                    foregroundColor:
+                        Colors.black, // Changed text color to black
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
