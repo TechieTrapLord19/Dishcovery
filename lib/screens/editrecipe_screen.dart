@@ -1,39 +1,59 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/recipe.dart';
 import 'package:flutter_application_1/services/recipe_service.dart';
 import 'package:image_picker/image_picker.dart';
 
-class AddRecipeScreen extends StatefulWidget {
-  const AddRecipeScreen({super.key});
+class EditRecipeScreen extends StatefulWidget {
+  final Recipe recipe;
+
+  const EditRecipeScreen({super.key, required this.recipe});
 
   @override
-  State<AddRecipeScreen> createState() => _AddRecipeScreenState();
+  State<EditRecipeScreen> createState() => _EditRecipeScreenState();
 }
 
-class _AddRecipeScreenState extends State<AddRecipeScreen> {
+class _EditRecipeScreenState extends State<EditRecipeScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _prepTimeController = TextEditingController();
 
-  // Dynamic controllers for ingredients and steps
   final List<TextEditingController> _ingredientControllers = [];
   final List<TextEditingController> _stepControllers = [];
 
   File? _selectedImage;
-  Uint8List? _imageBytes; // Store image as bytes for web compatibility
+  Uint8List? _imageBytes;
+  String _existingImageUrl = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final recipe = widget.recipe;
+    _titleController.text = recipe.title;
+    _descController.text = recipe.description;
+    _prepTimeController.text = recipe.duration.toString();
+    _existingImageUrl = recipe.imageUrl;
+
+    for (final i in recipe.ingredients) {
+      _ingredientControllers.add(TextEditingController(text: i));
+    }
+    for (final s in recipe.steps) {
+      _stepControllers.add(TextEditingController(text: s));
+    }
+  }
 
   @override
   void dispose() {
-    // Dispose all controllers to avoid memory leaks
     _titleController.dispose();
     _descController.dispose();
     _prepTimeController.dispose();
-    for (final controller in _ingredientControllers) {
-      controller.dispose();
+    for (final c in _ingredientControllers) {
+      c.dispose();
     }
-    for (final controller in _stepControllers) {
-      controller.dispose();
+    for (final c in _stepControllers) {
+      c.dispose();
     }
     super.dispose();
   }
@@ -42,20 +62,17 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     try {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
       if (pickedFile != null) {
-        // Read the image as bytes for web compatibility
         final bytes = await pickedFile.readAsBytes();
-
         setState(() {
           _selectedImage = File(pickedFile.path);
-          _imageBytes = bytes; // Store bytes for display
+          _imageBytes = bytes;
         });
       }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Failed to pick image: $e")));
+      ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
     }
   }
 
@@ -63,7 +80,85 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     setState(() {
       _selectedImage = null;
       _imageBytes = null;
+      _existingImageUrl = '';
     });
+  }
+
+  void _addIngredient() {
+    setState(() => _ingredientControllers.add(TextEditingController()));
+  }
+
+  void _removeIngredient(int index) {
+    setState(() {
+      _ingredientControllers[index].dispose();
+      _ingredientControllers.removeAt(index);
+    });
+  }
+
+  void _addStep() {
+    setState(() => _stepControllers.add(TextEditingController()));
+  }
+
+  void _removeStep(int index) {
+    setState(() {
+      _stepControllers[index].dispose();
+      _stepControllers.removeAt(index);
+    });
+  }
+
+  Future<void> _saveEdits() async {
+    if (_titleController.text.isEmpty ||
+        _descController.text.isEmpty ||
+        _prepTimeController.text.isEmpty ||
+        _ingredientControllers.isEmpty ||
+        _stepControllers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
+      return;
+    }
+
+    try {
+      String imageUrl = _existingImageUrl;
+      if (_imageBytes != null || _selectedImage != null) {
+        final uploaded = await RecipeService().uploadImage(
+          _selectedImage,
+          webImageBytes: _imageBytes,
+        );
+        if (uploaded != null) imageUrl = uploaded;
+      }
+
+      final ingredients = _ingredientControllers
+          .map((c) => c.text.trim())
+          .where((t) => t.isNotEmpty)
+          .toList();
+      final steps = _stepControllers
+          .map((c) => c.text.trim())
+          .where((t) => t.isNotEmpty)
+          .toList();
+
+      await RecipeService().updateRecipe(
+        recipeId: widget.recipe.id,
+        data: {
+          'title': _titleController.text.trim(),
+          'description': _descController.text.trim(),
+          'imageUrl': imageUrl,
+          'duration': int.tryParse(_prepTimeController.text.trim()) ?? 0,
+          'ingredients': ingredients,
+          'steps': steps,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recipe updated successfully!')),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update recipe: $e')));
+    }
   }
 
   Widget _buildImageSection() {
@@ -77,20 +172,25 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
           borderRadius: BorderRadius.circular(12),
           color: Colors.white,
         ),
-        child: _imageBytes != null
+        child: (_imageBytes != null || _existingImageUrl.isNotEmpty)
             ? Stack(
                 children: [
-                  // Display selected image - works on both mobile and web
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(
-                      _imageBytes!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                    ),
+                    child: _imageBytes != null
+                        ? Image.memory(
+                            _imageBytes!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          )
+                        : Image.network(
+                            _existingImageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
                   ),
-                  // Remove button
                   Positioned(
                     top: 8,
                     right: 8,
@@ -119,107 +219,13 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Tap to add photo',
+                    'Tap to change photo',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                   ),
                 ],
               ),
       ),
     );
-  }
-
-  // Add a new ingredient input field
-  void _addIngredient() {
-    setState(() {
-      _ingredientControllers.add(TextEditingController());
-    });
-  }
-
-  // Remove an ingredient input field
-  void _removeIngredient(int index) {
-    setState(() {
-      _ingredientControllers[index].dispose();
-      _ingredientControllers.removeAt(index);
-    });
-  }
-
-  // Add a new step input field
-  void _addStep() {
-    setState(() {
-      _stepControllers.add(TextEditingController());
-    });
-  }
-
-  // Remove a step input field
-  void _removeStep(int index) {
-    setState(() {
-      _stepControllers[index].dispose();
-      _stepControllers.removeAt(index);
-    });
-  }
-
-  void _submitRecipe() async {
-    if (_imageBytes == null && _selectedImage == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Please add an image")));
-      return;
-    }
-
-    if (_titleController.text.isEmpty ||
-        _descController.text.isEmpty ||
-        _prepTimeController.text.isEmpty ||
-        _ingredientControllers.isEmpty ||
-        _stepControllers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all fields")),
-      );
-      return;
-    }
-
-    try {
-      // Upload the image to Cloudinary
-      final imageUrl = await RecipeService().uploadImage(
-        _selectedImage!,
-        webImageBytes: _imageBytes, // Pass bytes for web
-      );
-      if (imageUrl == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Failed to upload image")));
-        return;
-      }
-
-      // Collect ingredients and steps
-      final ingredients = _ingredientControllers
-          .map((controller) => controller.text.trim())
-          .where((text) => text.isNotEmpty)
-          .toList();
-      final steps = _stepControllers
-          .map((controller) => controller.text.trim())
-          .where((text) => text.isNotEmpty)
-          .toList();
-
-      // Save the recipe to Firestore
-      await RecipeService().saveRecipe(
-        title: _titleController.text.trim(),
-        description: _descController.text.trim(),
-        imageUrl: imageUrl,
-        rating: 0.0, // Default rating
-        duration: int.tryParse(_prepTimeController.text.trim()) ?? 0,
-        ingredients: ingredients,
-        steps: steps,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Recipe added successfully!")),
-      );
-      Navigator.pop(context); // Go back to the previous screen
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Failed to add recipe: $e")));
-    }
   }
 
   Widget _buildTextField(
@@ -252,7 +258,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Add Recipe",
+          'Edit Recipe',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
@@ -260,16 +266,11 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Image Section
             _buildImageSection(),
             const SizedBox(height: 20),
-
-            // Form Fields
-            _buildTextField("Recipe Title", _titleController),
-            _buildTextField("Description", _descController, maxLines: 3),
-            _buildTextField("Preparation Time (minutes)", _prepTimeController),
-
-            // Ingredients Section
+            _buildTextField('Recipe Title', _titleController),
+            _buildTextField('Description', _descController, maxLines: 3),
+            _buildTextField('Preparation Time (minutes)', _prepTimeController),
             const Text(
               'Ingredients',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -312,10 +313,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                 foregroundColor: Colors.black,
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // Steps Section
             const Text(
               'Steps',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -352,46 +350,26 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ElevatedButton.icon(
               onPressed: _addStep,
               icon: const Icon(Icons.add),
-              label: const Text('Add Step'),
+              label: const Text('Add Steps'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFFD580),
                 foregroundColor: Colors.black,
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      side: BorderSide(color: Colors.orange.shade400),
-                    ),
-                    child: const Text(
-                      "CANCEL",
-                      style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
-                    ),
-                  ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saveEdits,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFD580),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _submitRecipe,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFD580),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                    child: const Text(
-                      "Submit Recipe",
-                      style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
-                    ),
-                  ),
+                child: const Text(
+                  'Save Changes',
+                  style: TextStyle(color: Colors.black),
                 ),
-              ],
+              ),
             ),
           ],
         ),

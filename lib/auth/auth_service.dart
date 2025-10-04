@@ -30,7 +30,7 @@ class AuthService {
           'email': email,
           'bio': bio,
           'profilePictureURL': profilePictureURL,
-
+          'role': 'user', // Default role is 'user'
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -63,4 +63,13 @@ class AuthService {
 
   // Get current user
   User? get currentUser => _auth.currentUser;
+
+  Future<String?> getUserRole() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      return userDoc.data()?['role'];
+    }
+    return null;
+  }
 }

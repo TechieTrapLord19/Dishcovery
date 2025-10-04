@@ -109,16 +109,116 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Widget _buildImageSection() {
+    return GestureDetector(
+      onTap: _pickNewProfilePicture,
+      child: Center(
+        child: Container(
+          height: 150,
+          width: 150,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.orange.shade300, width: 2),
+            color: Colors.white,
+          ),
+          child: (newProfileImageBytes != null || profilePictureURL.isNotEmpty)
+              ? Stack(
+                  children: [
+                    ClipOval(
+                      child: newProfileImageBytes != null
+                          ? Image.memory(
+                              newProfileImageBytes!,
+                              fit: BoxFit.cover,
+                              width: 150,
+                              height: 150,
+                            )
+                          : Image.network(
+                              profilePictureURL,
+                              fit: BoxFit.cover,
+                              width: 150,
+                              height: 150,
+                            ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.black54,
+                        radius: 16,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              newProfileImageBytes = null;
+                              profilePictureURL = '';
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.add_photo_alternate,
+                      size: 50,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Tap to change photo',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
+    int maxLines = 1,
+    String? hint,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFFBF5),
       appBar: AppBar(
-        title: const Text('Edit Profile'),
-        backgroundColor: const Color(0xFFFFD580),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
       body: SingleChildScrollView(
@@ -126,98 +226,53 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile Picture
-            Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.grey,
-                    backgroundImage: newProfileImageBytes != null
-                        ? MemoryImage(newProfileImageBytes!)
-                        : (profilePictureURL.isNotEmpty
-                                  ? NetworkImage(profilePictureURL)
-                                  : const AssetImage("assets/profile.png"))
-                              as ImageProvider,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _pickNewProfilePicture,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFFD580),
-                          shape: BoxShape.circle,
-                        ),
-                        padding: const EdgeInsets.all(8),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          color: Color.fromARGB(255, 0, 0, 0),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildImageSection(),
             const SizedBox(height: 20),
-
-            // Full Name
             const Text(
               'Full Name',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Enter your full name',
-              ),
+            _buildTextField(
+              'Full Name',
+              _nameController,
+              hint: 'Enter your full name',
             ),
-            const SizedBox(height: 20),
-
-            // Username
+            const SizedBox(height: 16),
             const Text(
               'Username',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Enter your username',
-              ),
+            _buildTextField(
+              'Username',
+              _usernameController,
+              hint: 'Enter your username',
             ),
-            const SizedBox(height: 20),
-
-            // Bio
-            const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            const Text(
+              'Bio',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _bioController,
+            _buildTextField(
+              'Bio',
+              _bioController,
               maxLines: 3,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Enter your bio',
-              ),
+              hint: 'Enter your bio',
             ),
-            const SizedBox(height: 20),
-
-            // Save Button
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _saveChanges,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFD580),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
                 child: const Text(
                   'Save Changes',
-                  style: TextStyle(fontSize: 16),
+                  style: TextStyle(color: Colors.black),
                 ),
               ),
             ),

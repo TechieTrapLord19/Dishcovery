@@ -3,6 +3,10 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/recipe.dart';
+import 'package:flutter_application_1/models/recipe_card.dart';
+import 'package:flutter_application_1/screens/addrecipe_screen.dart';
+import 'package:flutter_application_1/screens/archive_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/recipe_service.dart';
 import 'package:flutter_application_1/auth/auth_service.dart';
@@ -26,6 +30,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   String bio = "Loading...";
   String profilePictureURL = "";
   List<Map<String, dynamic>> userPosts = []; // List to store user's posts
+  List<Map<String, dynamic>> favoriteRecipes = []; // List to store favorites
+  List<Map<String, dynamic>> likedRecipes = []; // List to store liked recipes
 
   @override
   void initState() {
@@ -33,56 +39,130 @@ class _ProfileScreenState extends State<ProfileScreen>
     _tabController = TabController(length: 3, vsync: this);
     _fetchUserData(); // Fetch user data on initialization
     _fetchUserPosts(); // Fetch user's posts on initialization
+    _fetchFavorites(); // Fetch user's favorites
+    _fetchLikedRecipes(); // Fetch user's liked recipes
   }
 
   // Fetch user data from Firestore
   Future<void> _fetchUserData() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
-        if (userDoc.exists) {
-          final data = userDoc.data()!;
-          setState(() {
-            fullName = data['fullName'] ?? 'No Name';
-            username = data['username'] ?? 'No Username';
-            bio = data['bio'] ?? 'No Bio';
-            profilePictureURL =
-                data['profilePictureURL'] ?? ''; // Default to empty string
-          });
-        }
+      if (userDoc.exists) {
+        final data = userDoc.data()!;
+        setState(() {
+          fullName = data['fullName'] ?? 'No Name';
+          username = data['username'] ?? 'No Username';
+          bio = data['bio'] ?? 'No Bio';
+          profilePictureURL =
+              data['profilePictureURL'] ?? ''; // Default to empty string
+        });
       }
-    } catch (e) {
-      print('Error fetching user data: $e');
     }
   }
 
   // Fetch user's posts from Firestore
   Future<void> _fetchUserPosts() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('recipes')
-            .where(
-              'userId',
-              isEqualTo: user.uid,
-            ) // Filter by logged-in user's ID
-            .get();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // Load archived ids to exclude
+      final archived = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('archives')
+          .get();
+      final archivedIds = archived.docs.map((d) => d.id).toSet();
 
-        setState(() {
-          userPosts = querySnapshot.docs
-              .map((doc) => doc.data() as Map<String, dynamic>)
-              .toList();
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('recipes')
+          .where('userId', isEqualTo: user.uid) // Filter by logged-in user's ID
+          .get();
+
+      setState(() {
+        userPosts = querySnapshot.docs
+            .where((doc) => !archivedIds.contains(doc.id))
+            .map(
+              (doc) => {
+                ...doc.data(),
+                'id': doc.id, // Add the document ID
+              },
+            )
+            .toList();
+      });
+    }
+  }
+
+  // Fetch user's favorite recipes
+  Future<void> _fetchFavorites() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final favoritesSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .get();
+
+    final archivedSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('archives')
+        .get();
+    final archivedIds = archivedSnapshot.docs.map((d) => d.id).toSet();
+
+    final List<Map<String, dynamic>> fetchedFavorites = [];
+    for (final doc in favoritesSnapshot.docs) {
+      final recipeId = doc.id;
+      final recipeSnapshot = await FirebaseFirestore.instance
+          .collection('recipes')
+          .doc(recipeId)
+          .get();
+
+      if (recipeSnapshot.exists && !archivedIds.contains(recipeId)) {
+        fetchedFavorites.add({
+          ...recipeSnapshot.data()!,
+          'id': recipeId, // Add the document ID
         });
       }
-    } catch (e) {
-      print('Error fetching user posts: $e');
     }
+
+    setState(() {
+      favoriteRecipes = fetchedFavorites;
+    });
+  }
+
+  // Fetch recipes liked by the user
+  Future<void> _fetchLikedRecipes() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final likedSnapshot = await FirebaseFirestore.instance
+        .collection('recipes')
+        .where('likedBy', arrayContains: user.uid)
+        .get();
+
+    final archivedSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('archives')
+        .get();
+    final archivedIds = archivedSnapshot.docs.map((d) => d.id).toSet();
+
+    setState(() {
+      likedRecipes = likedSnapshot.docs
+          .where((doc) => !archivedIds.contains(doc.id))
+          .map(
+            (doc) => {
+              ...doc.data(),
+              'id': doc.id, // Add the document ID
+            },
+          )
+          .toList();
+    });
   }
 
   // Pick and upload a new profile picture
@@ -282,6 +362,71 @@ class _ProfileScreenState extends State<ProfileScreen>
                       endIndent: 16,
                     ),
 
+                    // Archive Option
+                    // Inside the _showSettingsModal method, replace the Archive Option's onTap:
+                    InkWell(
+                      onTap: () {
+                        Navigator.pop(context); // Close the modal
+                        // Navigate to ArchiveScreen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ArchiveScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.archive_outlined,
+                                color: Colors.orange.shade600,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Archive',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              color: Colors.grey.shade400,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Divider
+                    Divider(
+                      height: 1,
+                      color: Colors.grey.shade200,
+                      indent: 16,
+                      endIndent: 16,
+                    ),
+
                     // Logout Option
                     InkWell(
                       onTap: () {
@@ -444,11 +589,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                       radius: 80,
                       backgroundColor: Colors.grey,
                       backgroundImage: profilePictureURL.isNotEmpty
-                          ? NetworkImage(
-                              profilePictureURL,
-                            ) // Use NetworkImage for the URL
-                          : const AssetImage("assets/profile.png")
-                                as ImageProvider, // Default image
+                          ? NetworkImage(profilePictureURL)
+                          : null,
                       child: profilePictureURL.isEmpty
                           ? const Icon(
                               Icons.person,
@@ -461,7 +603,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       bottom: 0,
                       right: 0,
                       child: GestureDetector(
-                        onTap: _updateProfilePicture, // Trigger image update
+                        onTap: _updateProfilePicture,
                         child: Container(
                           decoration: const BoxDecoration(
                             color: Color(0xFFFFD580),
@@ -497,32 +639,22 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                       const SizedBox(height: 8),
                       GestureDetector(
-                        onTap: _editBio, // Open the edit bio dialog
+                        onTap: _editBio,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              bio.isNotEmpty
-                                  ? bio
-                                  : '', // Show bio or default message
+                              bio.isNotEmpty ? bio : '+ Add Bio',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: bio.isNotEmpty
                                     ? Colors.black
-                                    : Colors.grey, // Grey for default message
+                                    : Colors.grey,
                                 fontStyle: bio.isNotEmpty
                                     ? FontStyle.normal
                                     : FontStyle.italic,
                               ),
                             ),
-                            if (bio.isEmpty)
-                              const Text(
-                                'Tap to add a bio',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
                           ],
                         ),
                       ),
@@ -543,8 +675,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             indicatorColor: Colors.orange,
             tabs: const [
               Tab(icon: Icon(Icons.grid_on), text: "Posts"),
-              Tab(icon: Icon(Icons.bookmark_border), text: "Saved"),
-              Tab(icon: Icon(Icons.favorite_border), text: "Liked"),
+              Tab(icon: Icon(Icons.bookmark), text: "Favorites"),
+              Tab(icon: Icon(Icons.favorite), text: "Liked"),
             ],
           ),
 
@@ -554,12 +686,22 @@ class _ProfileScreenState extends State<ProfileScreen>
               controller: _tabController,
               children: [
                 _buildUserPostsGridView(), // Posts
-                _buildPlaceholderView("Saved"), // Saved
-                _buildPlaceholderView("Liked"), // Liked
+                _buildFavoritesGridView(), // Favorites
+                _buildLikedGridView(), // Liked Recipes
               ],
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => AddRecipeScreen()),
+          );
+        },
+        backgroundColor: const Color(0xFFFFD580),
+        child: const Icon(Icons.add, color: Colors.black),
       ),
     );
   }
@@ -622,92 +764,253 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  void _navigateToRecipeDetail(Map<String, dynamic> recipeData) {
+    final recipe = Recipe.fromFirestore(recipeData['id'], recipeData);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RecipeDetailScreen(recipe: recipe),
+      ),
+    );
+  }
+
   // Build the grid view for user's posts
   Widget _buildUserPostsGridView() {
-    if (userPosts.isEmpty) {
-      return const Center(child: Text("No posts yet."));
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return const Center(child: Text("No user logged in."));
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: userPosts.length,
-      itemBuilder: (context, index) {
-        final post = userPosts[index];
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 6,
-                offset: const Offset(2, 4),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('archives')
+          .snapshots(),
+      builder: (context, archiveSnap) {
+        if (archiveSnap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final archivedIds = <String>{
+          if (archiveSnap.hasData) ...archiveSnap.data!.docs.map((d) => d.id),
+        };
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('recipes')
+              .where('userId', isEqualTo: user.uid)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Center(child: Text("No posts yet."));
+            }
+
+            final userPosts = snapshot.data!.docs
+                .where((doc) => !archivedIds.contains(doc.id))
+                .map((doc) {
+                  return {
+                    ...doc.data() as Map<String, dynamic>,
+                    'id': doc.id, // Add the document ID
+                  };
+                })
+                .toList();
+
+            return GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.75,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 100,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                  image: DecorationImage(
-                    image: NetworkImage(post['imageUrl']),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      post['title'] ?? "No Title",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.orange, size: 14),
-                        const SizedBox(width: 4),
-                        Text("${post['rating'] ?? 0.0}"),
-                        const SizedBox(width: 10),
-                        const Icon(
-                          Icons.access_time,
-                          color: Colors.grey,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text("${post['duration'] ?? 0} mins"),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+              itemCount: userPosts.length,
+              itemBuilder: (context, index) {
+                final postData = userPosts[index];
+                final recipe = Recipe.fromFirestore(
+                  postData['id'] ?? '',
+                  postData,
+                );
+                return RecipeCard(recipe: recipe);
+              },
+            );
+          },
         );
       },
     );
   }
 
-  // Placeholder for other tabs
-  Widget _buildPlaceholderView(String label) {
-    return Center(child: Text("No $label yet."));
+  // Build the grid view for favorites
+  Widget _buildFavoritesGridView() {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return const Center(child: Text("No user logged in."));
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('archives')
+          .snapshots(),
+      builder: (context, archiveSnap) {
+        if (archiveSnap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        // Get all archived recipe IDs
+        final archivedIds = <String>{
+          if (archiveSnap.hasData) ...archiveSnap.data!.docs.map((d) => d.id),
+        };
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('favorites')
+              .snapshots(),
+          builder: (context, favoritesSnap) {
+            if (favoritesSnap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (!favoritesSnap.hasData || favoritesSnap.data!.docs.isEmpty) {
+              return const Center(child: Text("No favorites yet."));
+            }
+
+            // Get all favorite recipe IDs
+            final favoriteIds = favoritesSnap.data!.docs
+                .map((doc) => doc.id)
+                .where(
+                  (id) => !archivedIds.contains(id),
+                ) // Exclude archived IDs
+                .toList();
+
+            if (favoriteIds.isEmpty) {
+              return const Center(child: Text("No favorites yet."));
+            }
+
+            // Fetch actual recipes from recipes collection
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('recipes')
+                  .where(FieldPath.documentId, whereIn: favoriteIds)
+                  .snapshots(),
+              builder: (context, recipesSnap) {
+                if (recipesSnap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (!recipesSnap.hasData || recipesSnap.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Text("No favorite recipes found."),
+                  );
+                }
+
+                final favoriteRecipes = recipesSnap.data!.docs.map((doc) {
+                  return Recipe.fromFirestore(
+                    doc.id,
+                    doc.data() as Map<String, dynamic>,
+                  );
+                }).toList();
+
+                return GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.75,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: favoriteRecipes.length,
+                  itemBuilder: (context, index) {
+                    final recipe = favoriteRecipes[index];
+                    return RecipeCard(recipe: recipe);
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Build the grid view for liked recipes
+  Widget _buildLikedGridView() {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return const Center(child: Text("No user logged in."));
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('archives')
+          .snapshots(),
+      builder: (context, archiveSnap) {
+        if (archiveSnap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final archivedIds = <String>{
+          if (archiveSnap.hasData) ...archiveSnap.data!.docs.map((d) => d.id),
+        };
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('recipes')
+              .where('likedBy', arrayContains: user.uid)
+              .snapshots(),
+          builder: (context, likedSnap) {
+            if (likedSnap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (!likedSnap.hasData || likedSnap.data!.docs.isEmpty) {
+              return const Center(child: Text("No liked recipes yet."));
+            }
+
+            final likedRecipes = likedSnap.data!.docs
+                .where((doc) => !archivedIds.contains(doc.id))
+                .map((doc) {
+                  return {
+                    ...doc.data() as Map<String, dynamic>,
+                    'id': doc.id, // Add the document ID
+                  };
+                })
+                .toList();
+
+            return GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.75,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: likedRecipes.length,
+              itemBuilder: (context, index) {
+                final recipeData = likedRecipes[index];
+                final recipe = Recipe.fromFirestore(
+                  recipeData['id'] ?? '',
+                  recipeData,
+                );
+                return RecipeCard(recipe: recipe);
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }

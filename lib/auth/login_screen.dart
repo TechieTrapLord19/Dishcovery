@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_application_1/auth/auth_service.dart';
 import 'package:flutter_application_1/auth/signup_screen.dart';
 import '../screens/home_screen.dart';
@@ -57,10 +56,15 @@ class _LoginScreenState extends State<LoginScreen> {
     final user = await AuthService().logIn(email, password);
 
     if (user != null) {
+      // Fetch the user's role
+      final role = await AuthService().getUserRole();
+
       // Login successful
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Login successful!")));
+
+      // Navigate to the HomeScreen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomeScreen()),

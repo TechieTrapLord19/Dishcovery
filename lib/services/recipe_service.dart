@@ -71,6 +71,19 @@ class RecipeService {
     required List<String> steps,
   }) async {
     try {
+      final user = FirebaseAuth.instance.currentUser!;
+
+      // Get user's username from users collection
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      String username = 'Unknown User';
+      if (userDoc.exists && userDoc.data() != null) {
+        username = userDoc.data()!['username'] ?? 'Unknown User';
+      }
+
       await FirebaseFirestore.instance.collection('recipes').add({
         'title': title,
         'description': description,
@@ -79,8 +92,8 @@ class RecipeService {
         'duration': duration,
         'ingredients': ingredients,
         'steps': steps,
-        'userId':
-            FirebaseAuth.instance.currentUser!.uid, // Ensure userId is added
+        'userId': user.uid, // Ensure userId is added
+        'username': username, // Add username for easy access
         'createdAt': FieldValue.serverTimestamp(),
       });
       print('Recipe saved successfully!');
@@ -88,5 +101,15 @@ class RecipeService {
       print('Failed to save recipe: $e');
       throw Exception('Failed to save recipe: $e');
     }
+  }
+
+  Future<void> updateRecipe({
+    required String recipeId,
+    required Map<String, dynamic> data,
+  }) async {
+    await FirebaseFirestore.instance
+        .collection('recipes')
+        .doc(recipeId)
+        .update(data);
   }
 }

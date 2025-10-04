@@ -20,7 +20,10 @@ class LandingScreen extends StatelessWidget {
                 width:
                     MediaQuery.of(context).size.width *
                     0.6, // 60% of screen width
-                child: Image.asset('assets/dishcovery_transparent.png'),
+                child: Image.asset(
+                  ''
+                  'assets/dishcovery_transparent.png',
+                ),
               ),
 
               // Welcome text

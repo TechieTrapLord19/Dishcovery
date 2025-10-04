@@ -19,6 +19,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _bioController = TextEditingController();
   final _profilePictureURLController = TextEditingController();
 
+  bool _isPasswordVisible = false; // Track password visibility
+  bool _isConfirmPasswordVisible = false; // Track confirm password visibility
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -31,7 +34,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  InputDecoration _inputDecoration(String label) {
+  InputDecoration _inputDecoration(
+    String label, {
+    bool isPasswordField = false,
+    VoidCallback? toggleVisibility,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: 'Enter your $label'.toLowerCase(),
@@ -49,8 +56,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
           : label == "Email"
           ? const Icon(Icons.email, color: Color(0xFFFFB84D))
           : const Icon(Icons.lock, color: Color(0xFFFFB84D)),
-      suffixIcon: label.contains("Password")
-          ? const Icon(Icons.visibility, color: Color(0xFFFFB84D))
+      suffixIcon: isPasswordField
+          ? IconButton(
+              icon: Icon(
+                toggleVisibility != null && label == "Password"
+                    ? (_isPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility)
+                    : (_isConfirmPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                color: const Color(0xFFFFB84D),
+              ),
+              onPressed: toggleVisibility,
+            )
           : null,
     );
   }
@@ -67,7 +86,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Column(
               children: [
                 SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.35,
+                  width: MediaQuery.of(context).size.width * 0.30,
                   child: Image.asset('assets/dishcovery_transparent.png'),
                 ),
                 const Text(
@@ -110,8 +129,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
-                  obscureText: true,
-                  decoration: _inputDecoration('Password'),
+                  obscureText: !_isPasswordVisible, // Toggle visibility
+                  decoration: _inputDecoration(
+                    'Password',
+                    isPasswordField: true,
+                    toggleVisibility: () {
+                      setState(() {
+                        _isPasswordVisible = !_isPasswordVisible;
+                      });
+                    },
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your password';
@@ -122,8 +149,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: _inputDecoration('Confirm Password'),
+                  obscureText: !_isConfirmPasswordVisible, // Toggle visibility
+                  decoration: _inputDecoration(
+                    'Confirm Password',
+                    isPasswordField: true,
+                    toggleVisibility: () {
+                      setState(() {
+                        _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                      });
+                    },
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please confirm your password';
@@ -165,8 +200,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFD580),
-                    foregroundColor:
-                        Colors.black, // Changed text color to black
+                    foregroundColor: Colors.black,
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
