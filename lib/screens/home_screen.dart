@@ -7,6 +7,8 @@ import 'package:flutter_application_1/models/recipe.dart';
 import 'package:flutter_application_1/models/recipe_card.dart';
 import 'package:flutter_application_1/screens/addrecipe_screen.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
+import 'package:flutter_application_1/screens/managepost_screen.dart';
+import 'package:flutter_application_1/screens/manageuser_screen.dart';
 import 'package:provider/provider.dart';
 import '../auth/user_provider.dart';
 
@@ -20,6 +22,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch user role when the screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<UserProvider>(context, listen: false).fetchUserRole();
+    });
+  }
 
   void _onSearchChanged() {
     setState(() {
@@ -69,8 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userRole = Provider.of<UserProvider>(context).role;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBF5), // soft cream background
       appBar: AppBar(
@@ -207,49 +216,122 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                 const SizedBox(height: 16),
 
-                                // Manage Posts Option
-                                InkWell(
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    // Navigate to Manage Posts screen
-                                  },
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 44,
-                                          height: 44,
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange.shade50,
-                                            shape: BoxShape.circle,
+                                // Manage Posts Option (Admin only)
+                                Consumer<UserProvider>(
+                                  builder: (context, userProvider, child) {
+                                    if (userProvider.role != 'admin') {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return InkWell(
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const ManagePostsScreen(),
                                           ),
-                                          child: Icon(
-                                            Icons.post_add,
-                                            color: Colors.orange.shade600,
-                                            size: 22,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        const Expanded(
-                                          child: Text(
-                                            'Manage Posts',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 44,
+                                              height: 44,
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.shade50,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                Icons.post_add,
+                                                color: Colors.orange.shade600,
+                                                size: 22,
+                                              ),
                                             ),
+                                            const SizedBox(width: 16),
+                                            const Expanded(
+                                              child: Text(
+                                                'Manage Posts',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.arrow_forward_ios_rounded,
+                                              color: Colors.grey.shade400,
+                                              size: 16,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                // Manage Users Option (Admin only)
+                                Consumer<UserProvider>(
+                                  builder: (context, userProvider, child) {
+                                    if (userProvider.role != 'admin') {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return InkWell(
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const ManageUsersScreen(),
                                           ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 44,
+                                              height: 44,
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.shade50,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                Icons.people,
+                                                color: Colors.orange.shade600,
+                                                size: 22,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            const Expanded(
+                                              child: Text(
+                                                'Manage Users',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.arrow_forward_ios_rounded,
+                                              color: Colors.grey.shade400,
+                                              size: 16,
+                                            ),
+                                          ],
                                         ),
-                                        Icon(
-                                          Icons.arrow_forward_ios_rounded,
-                                          color: Colors.grey.shade400,
-                                          size: 16,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                      ),
+                                    );
+                                  },
                                 ),
 
                                 const SizedBox(height: 16),
@@ -358,6 +440,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 return StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('recipes')
+                      .orderBy('createdAt', descending: true)
                       .snapshots(),
                   builder: (context, recipeSnap) {
                     if (recipeSnap.connectionState == ConnectionState.waiting) {
@@ -369,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
 
                     // Filter out archived recipes and apply search query
-                    final recipes = recipeSnap.data!.docs
+                    final allRecipes = recipeSnap.data!.docs
                         .where((doc) => !archivedIds.contains(doc.id))
                         .map((doc) {
                           final data = doc.data() as Map<String, dynamic>;
@@ -385,6 +468,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                         )
                         .toList();
+
+                    // Separate featured and regular recipes
+                    final featuredRecipes = allRecipes
+                        .where((recipe) => recipe.isFeatured)
+                        .toList();
+                    final regularRecipes = allRecipes
+                        .where((recipe) => !recipe.isFeatured)
+                        .toList();
+
+                    // Combine: featured first, then regular (both already sorted by createdAt desc)
+                    final recipes = [...featuredRecipes, ...regularRecipes];
 
                     if (recipes.isEmpty) {
                       return const Center(

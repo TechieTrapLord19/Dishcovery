@@ -857,6 +857,9 @@ class Recipe {
   final List<String> steps;
   final String author;
   final String userId;
+  final bool isHidden;
+  final bool isFeatured;
+  final List<String>? likedBy;
 
   Recipe({
     required this.id,
@@ -869,6 +872,9 @@ class Recipe {
     required this.steps,
     required this.author,
     required this.userId,
+    this.isHidden = false,
+    this.isFeatured = false,
+    this.likedBy,
   });
 
   factory Recipe.fromFirestore(String id, Map<String, dynamic> data) {
@@ -885,6 +891,11 @@ class Recipe {
           data['username'] ??
           'Unknown Author', // Use username field if available
       userId: (data['userId'] ?? '') as String,
+      isHidden: data['isHidden'] ?? false,
+      isFeatured: data['isFeatured'] ?? false,
+      likedBy: data['likedBy'] != null
+          ? List<String>.from(data['likedBy'])
+          : null,
     );
   }
 }

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,7 +13,8 @@ import 'package:flutter_application_1/auth/login_screen.dart';
 import 'package:flutter_application_1/screens/editprofile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final String? userId; // If null, shows current user's profile
+  const ProfileScreen({super.key, this.userId});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -33,23 +33,51 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<Map<String, dynamic>> favoriteRecipes = []; // List to store favorites
   List<Map<String, dynamic>> likedRecipes = []; // List to store liked recipes
 
+  // Admin-related variables
+  String? profileUserId; // The user whose profile is being viewed
+  bool isAdmin = false;
+  bool isViewingOwnProfile = true;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
+    // Set profile user ID
+    profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid;
+    isViewingOwnProfile = widget.userId == null;
+
+    _checkAdminStatus(); // Check if current user is admin
     _fetchUserData(); // Fetch user data on initialization
     _fetchUserPosts(); // Fetch user's posts on initialization
     _fetchFavorites(); // Fetch user's favorites
     _fetchLikedRecipes(); // Fetch user's liked recipes
   }
 
-  // Fetch user data from Firestore
-  Future<void> _fetchUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+  // Check if current user is admin
+  Future<void> _checkAdminStatus() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(currentUser.uid)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data()!;
+        setState(() {
+          isAdmin = data['role'] == 'admin';
+        });
+      }
+    }
+  }
+
+  // Fetch user data from Firestore
+  Future<void> _fetchUserData() async {
+    if (profileUserId != null) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(profileUserId!)
           .get();
 
       if (userDoc.exists) {
@@ -67,19 +95,21 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Fetch user's posts from Firestore
   Future<void> _fetchUserPosts() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+    if (profileUserId != null) {
       // Load archived ids to exclude
       final archived = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(profileUserId!)
           .collection('archives')
           .get();
       final archivedIds = archived.docs.map((d) => d.id).toSet();
 
       final querySnapshot = await FirebaseFirestore.instance
           .collection('recipes')
-          .where('userId', isEqualTo: user.uid) // Filter by logged-in user's ID
+          .where(
+            'userId',
+            isEqualTo: profileUserId!,
+          ) // Filter by profile user's ID
           .get();
 
       setState(() {
@@ -98,18 +128,17 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Fetch user's favorite recipes
   Future<void> _fetchFavorites() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (profileUserId == null) return;
 
     final favoritesSnapshot = await FirebaseFirestore.instance
         .collection('users')
-        .doc(user.uid)
+        .doc(profileUserId!)
         .collection('favorites')
         .get();
 
     final archivedSnapshot = await FirebaseFirestore.instance
         .collection('users')
-        .doc(user.uid)
+        .doc(profileUserId!)
         .collection('archives')
         .get();
     final archivedIds = archivedSnapshot.docs.map((d) => d.id).toSet();
@@ -137,17 +166,16 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Fetch recipes liked by the user
   Future<void> _fetchLikedRecipes() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (profileUserId == null) return;
 
     final likedSnapshot = await FirebaseFirestore.instance
         .collection('recipes')
-        .where('likedBy', arrayContains: user.uid)
+        .where('likedBy', arrayContains: profileUserId!)
         .get();
 
     final archivedSnapshot = await FirebaseFirestore.instance
         .collection('users')
-        .doc(user.uid)
+        .doc(profileUserId!)
         .collection('archives')
         .get();
     final archivedIds = archivedSnapshot.docs.map((d) => d.id).toSet();
@@ -693,17 +721,247 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => AddRecipeScreen()),
-          );
-        },
-        backgroundColor: const Color(0xFFFFD580),
-        child: const Icon(Icons.add, color: Colors.black),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Admin controls (only show if admin and not viewing own profile)
+          if (isAdmin && !isViewingOwnProfile) ...[
+            FloatingActionButton(
+              heroTag: 'ban_user',
+              onPressed: _toggleBanUser,
+              backgroundColor: Colors.red,
+              child: const Icon(Icons.block, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton(
+              heroTag: 'make_admin',
+              onPressed: _toggleUserRole,
+              backgroundColor: Colors.purple,
+              child: const Icon(
+                Icons.admin_panel_settings,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton(
+              heroTag: 'delete_user',
+              onPressed: _deleteUser,
+              backgroundColor: Colors.red[700],
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+          ],
+          // Add recipe button (only show if viewing own profile)
+          if (isViewingOwnProfile)
+            FloatingActionButton(
+              heroTag: 'add_recipe',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddRecipeScreen()),
+                );
+              },
+              backgroundColor: const Color(0xFFFFD580),
+              child: const Icon(Icons.add, color: Colors.black),
+            ),
+        ],
       ),
     );
+  }
+
+  // Admin control methods
+  Future<void> _toggleBanUser() async {
+    if (profileUserId == null) return;
+
+    try {
+      // Get current ban status
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(profileUserId!)
+          .get();
+
+      if (userDoc.exists) {
+        final isBanned = userDoc.data()?['isBanned'] ?? false;
+        final action = isBanned ? 'unban' : 'ban';
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('${isBanned ? 'Unban' : 'Ban'} User'),
+            content: Text('Are you sure you want to $action $fullName?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(profileUserId!)
+                      .update({'isBanned': !isBanned});
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isBanned
+                              ? 'User unbanned successfully'
+                              : 'User banned successfully',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: Text(
+                  isBanned ? 'Unban' : 'Ban',
+                  style: TextStyle(color: isBanned ? Colors.green : Colors.red),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _toggleUserRole() async {
+    if (profileUserId == null) return;
+
+    try {
+      // Get current role
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(profileUserId!)
+          .get();
+
+      if (userDoc.exists) {
+        final currentRole = userDoc.data()?['role'] ?? 'user';
+        final newRole = currentRole == 'admin' ? 'user' : 'admin';
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('${newRole == 'admin' ? 'Make' : 'Remove'} Admin'),
+            content: Text(
+              'Are you sure you want to ${newRole == 'admin' ? 'make' : 'remove'} $fullName ${newRole == 'admin' ? 'an' : 'from'} admin?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(profileUserId!)
+                      .update({'role': newRole});
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          newRole == 'admin'
+                              ? 'User promoted to admin'
+                              : 'User role changed to user',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: Text(
+                  newRole == 'admin' ? 'Make Admin' : 'Remove Admin',
+                  style: TextStyle(
+                    color: newRole == 'admin' ? Colors.purple : Colors.orange,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteUser() async {
+    if (profileUserId == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete User'),
+        content: Text(
+          'Are you sure you want to delete $fullName? This action cannot be undone and will delete all their posts and data.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _confirmDeleteUser();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteUser() async {
+    if (profileUserId == null) return;
+
+    try {
+      // Delete user's posts first
+      final postsSnapshot = await FirebaseFirestore.instance
+          .collection('recipes')
+          .where('userId', isEqualTo: profileUserId!)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Delete all user's posts
+      for (final doc in postsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // Delete user document
+      batch.delete(
+        FirebaseFirestore.instance.collection('users').doc(profileUserId!),
+      );
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User deleted successfully')),
+        );
+        Navigator.pop(context); // Go back to previous screen
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error deleting user: $e')));
+      }
+    }
   }
 
   Future<void> _editBio() async {
@@ -764,29 +1022,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  void _navigateToRecipeDetail(Map<String, dynamic> recipeData) {
-    final recipe = Recipe.fromFirestore(recipeData['id'], recipeData);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RecipeDetailScreen(recipe: recipe),
-      ),
-    );
-  }
-
   // Build the grid view for user's posts
   Widget _buildUserPostsGridView() {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      return const Center(child: Text("No user logged in."));
+    if (profileUserId == null) {
+      return const Center(child: Text("No user selected."));
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(profileUserId!)
           .collection('archives')
           .snapshots(),
       builder: (context, archiveSnap) {
@@ -801,7 +1046,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('recipes')
-              .where('userId', isEqualTo: user.uid)
+              .where('userId', isEqualTo: profileUserId!)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -848,16 +1093,14 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Build the grid view for favorites
   Widget _buildFavoritesGridView() {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      return const Center(child: Text("No user logged in."));
+    if (profileUserId == null) {
+      return const Center(child: Text("No user selected."));
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(profileUserId!)
           .collection('archives')
           .snapshots(),
       builder: (context, archiveSnap) {
@@ -873,7 +1116,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
-              .doc(user.uid)
+              .doc(profileUserId!)
               .collection('favorites')
               .snapshots(),
           builder: (context, favoritesSnap) {
@@ -945,16 +1188,14 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Build the grid view for liked recipes
   Widget _buildLikedGridView() {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      return const Center(child: Text("No user logged in."));
+    if (profileUserId == null) {
+      return const Center(child: Text("No user selected."));
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(profileUserId!)
           .collection('archives')
           .snapshots(),
       builder: (context, archiveSnap) {
@@ -969,7 +1210,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('recipes')
-              .where('likedBy', arrayContains: user.uid)
+              .where('likedBy', arrayContains: profileUserId!)
               .snapshots(),
           builder: (context, likedSnap) {
             if (likedSnap.connectionState == ConnectionState.waiting) {
